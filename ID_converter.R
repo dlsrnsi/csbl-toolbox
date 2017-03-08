@@ -19,7 +19,9 @@ parser$add_argument("-o","--output", type="character", help="output file path")
 parser$add_argument("-r","--replace", action="store_true", help="determine converted IDs will replace original IDs")
 parser$add_argument("gene_ids", type="character", nargs="+", action="append",metavar="GENE_ID")
 args = parser$parse_args()
+
 #args = parser$parse_args(c("--header","--output", "C:/Users/dlsrnsi/Documents/csbl toolbox/test_2.txt" ,"--col","1","ensembl_gene_id", "hgnc_symbol", "C:/Users/dlsrnsi/Documents/csbl toolbox/test.txt"))
+
 original_type =  args$original_id_type
 target_type = args$target_id_type
 file_name = args$gene_ids
