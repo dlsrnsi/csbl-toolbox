@@ -34,5 +34,4 @@ Rscript ID_converter --inplace --header ensembl_gene_id hgnc_symbol ./file_path.
 
 ### things to do
 
-- add option `--replace` for replacing original column(not recommended)
 - add option `--sep` to specify seperator 
