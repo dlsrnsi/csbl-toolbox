@@ -32,3 +32,8 @@ read from csv and convert from ensembl gene id to hgnc symbol and replace origin
 Rscript ID_converter --inplace --header ensembl_gene_id hgnc_symbol ./file_path.csv
 ```
 
+# To do
+- [x] add option '--replace' to determine coverted id will replace original id
+- [ ] add option `--sep` to specify seperator 
+
+
