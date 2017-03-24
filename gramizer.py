@@ -3,39 +3,44 @@ import pandas as pd
 
 def gramize(seq, n):
     """
-    make n-gram with seq with offset 0,...,n-1
+    make n-gram with seq with offset [0,...,n-1]
 
-    :param seq: protein sequence
-    :return: list of list of n-gram by offset
+    Args:
+        seq: protein sequence
+        n : the number of gram
+    Return:
+        grams: list of list of n-gram by offset
     """
     if pd.isnull(seq):
         return None
     grams = []
-    n_gram = len(seq)-n
+    n_gram = len(seq)-n+1
     for offset in range(n):
         grams_offset = []
         for char in range(n_gram):
             if char%n==offset:
                 grams_offset.append(seq[char:char+n])
-            grams.append(grams_offset)
+        grams.append(grams_offset)
     return grams
 
 
 def flatten_list(list_of_list):
     """
-    flat list e.g [['a',b'],['c']] -> ['a','b','c']
+    flatten list e.g [['a',b'],['c']] -> ['a','b','c']
 
-    :param list_of_list: list include list
-    :return: flattend list
+    Args:
+        list_of_list list: list include list
+    Return:
+        flattend list: flattened list
     """
-    result_list = []
+    flattened_list = []
     for list_element in list_of_list:
         if list_element:
-            result_list += list_element
+            flattened_list += list_element
         else:
             continue
 
-    return result_list
+    return flattened_list
 
 
 if __name__ == "__main__":

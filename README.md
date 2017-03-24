@@ -1,5 +1,7 @@
 # ID converter
 
+ID converter with R bioconductor package biomaRt
+
 ## Dependencies
 
 - `R > 3.2.5`
@@ -32,8 +34,44 @@ read from csv and convert from ensembl gene id to hgnc symbol and replace origin
 Rscript ID_converter --inplace --header ensembl_gene_id hgnc_symbol ./file_path.csv
 ```
 
-# To do
+## To do
 - [x] add option '--replace' to determine coverted id will replace original id
 - [ ] add option `--sep` to specify seperator 
+
+
+# gramizer.py
+
+make n-gram from protein sequence with input n
+
+## dependency
+
+- `pandas`
+
+## Help
+
+```
+python gramizer.py --help
+```
+
+# prot2vec.py
+
+protein to vector, with tensorflow module.
+
+## dependency
+
+- `tensorflow`
+- `gramizer.py`
+- `pandas`
+- `numpy`
+
+## Help
+
+```
+python prot2vec.py
+```
+
+## To do
+
+- [ ] determine how output file will saved if only sequence is targeted
 
 
