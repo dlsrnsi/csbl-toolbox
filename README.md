@@ -64,6 +64,15 @@ protein to vector, with tensorflow module.
 - `pandas`
 - `numpy`
 
+## usage as class
+
+```
+from prot2vec import Prot2vec
+prot2vec =  Prot2vec(skip_window, num_skips, batch_size, embedding_size)
+count, dictionary, reverse_dictionary = prot2vec.build_dataset_from_seqlist(seq_list)
+final_embeddings =  prot2vec.learn()
+```
+
 ## Help
 
 ```
@@ -73,5 +82,6 @@ python prot2vec.py
 ## To do
 
 - [ ] determine how output file will saved if only sequence is targeted
+- [ ] make docstring
 
 
