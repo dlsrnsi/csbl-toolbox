@@ -18,45 +18,46 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
 import collections
 import math
 import random
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
-
+import numpy as np
 
 from gramizer import gramize, flatten_list
-
-
-    # Step 2: Build the protein n-gram dictionary
-
 
 
 class Prot2Vec(object):
     """
     Prot2Vec model (Skipgram)
+
+    Args:
+        num_skips (int): How many words to consider left and right.
+        skip_window (int): How many times to reuse an input to generate a label.
+        batch_size (int): batch size to feed
+
     """
 
-    def __init__(self, skip_window, num_skips, batch_size, embedding_size):
-        self.skip_window = skip_window
-        self.num_skips = num_skips
-        self.batch_size = batch_size
-        self.embedding_size =  embedding_size
-        self.seq_index = 0
-        self.gram_index = 0
-        self.data = None
-        self.count = None
-        self.dictionary = None
-        self.reverse_dictionary = None
+    def __init__(self, skip_window, num_skips, batch_size, normalized=True):
+        self._skip_window = skip_window
+        self._num_skips = num_skips
+        self._batch_size = batch_size
+        self._seq_index = 0
+        self._gram_index = 0
+        self._data = None
+        self._count = None
+        self._dictionary = None
+        self._reverse_dictionary = None
         # We pick a random validation set to sample nearest neighbors. Here we limit the
         # validation samples to the words that have a low numeric ID, which by
         # construction are also the most frequent.
-        self.valid_size = 16     # Random set of words to evaluate similarity on.
-        self.valid_window = 100  # Only pick dev samples in the head of the distribution.
-        self.valid_examples = np.random.choice(self.valid_window, self.valid_size, replace=False)
-        self.num_sampled = 64    # Number of negative examples to sample.
-        self.num_steps = 100001
+        self._valid_size = 16     # Random set of words to evaluate similarity on.
+        self._valid_window = 100  # Only pick dev samples in the head of the distribution.
+        self._valid_examples = np.random.choice(self._valid_window, self._valid_size, replace=False)
+        self._num_sampled = 64    # Number of negative examples to sample.
+        self._num_steps = 100001
+        self._normalized = normalized
 
     def _build_dataset(self, seqs):
         """
@@ -83,7 +84,17 @@ class Prot2Vec(object):
         reverse_dictionary = dict(zip(dictionary.values(), dictionary.keys()))
         return data, count, dictionary, reverse_dictionary
 
-    def build_dataset_from_seqlist(self, seq_list):
+    def build_dataset_from_seqlist(self, seq_list, n):
+        """
+
+        Prams:
+            seq_list: iterable list of sequences
+            n: specify the number of gram
+        Return:
+            count: list of pair ('word', count)
+            dictionary: dictionary of word-index pair, {"word", index}
+            reverse_dictionary: dictionary of index-word pair, {index, "word"}
+        """
         grams = list(map(lambda seq: gramize(seq, n), seq_list))
         seqs = flatten_list(grams)
 
@@ -91,17 +102,17 @@ class Prot2Vec(object):
 
         # Step 2, build dataset from parsed sequence
 
-        self.data, self.count, self.dictionary, self.reverse_dictionary = self._build_dataset(seqs)
+        self._data, self._count, self._dictionary, self._reverse_dictionary = self._build_dataset(seqs)
         del seqs
         del grams  # Hint to reduce memory.
-        print('Most common words ', self.count[:5])
-        print('Sample data', self.data[0][:10], [self.reverse_dictionary[i] for i in self.data[0][:10]])
-        self.vocabulary_size = len(self.count)
-        print("dataset from grammed sequences is built")
-        return self.count, self.dictionary, self.reverse_dictionary
+        print('Most common words ', self._count[:5])
+        print('Sample data', self._data[0][:10], [self._reverse_dictionary[i] for i in self._data[0][:10]])
+        self.vocabulary_size = len(self._count)
+        print("dataset from grammed ", str(len(self._data))," sequences is built")
+        return self._count, self._dictionary, self._reverse_dictionary
 
 # Step 3: Function to generate a training batch for the skip-gram model.
-    def generate_batch(self, batch_size, num_skips, skip_window):
+    def _generate_batch(self):
         """generate batch from original data with batch size for training. It will return batch and following label with skipping
 
         Args:
@@ -112,10 +123,10 @@ class Prot2Vec(object):
             batch: numpy ndarray with [batch_size] dimension which is input gram
             labels: numpy ndarray with [batch_size,1] dimension which is yielded word with skipping
         """
-        assert batch_size % num_skips == 0
-        assert num_skips <= 2 * skip_window
-        batch = np.ndarray(shape=(self.batch_size), dtype=np.int32)
-        labels = np.ndarray(shape=(self.batch_size, 1), dtype=np.int32)
+        assert self._batch_size % self._num_skips == 0
+        assert self._num_skips <= 2 * self._skip_window
+        batch = np.ndarray(shape=(self._batch_size), dtype=np.int32)
+        labels = np.ndarray(shape=(self._batch_size, 1), dtype=np.int32)
         n_batch = 0
 
         def get_label_candidates(cur_index, num_skips, skip_window, len_seq):
@@ -129,38 +140,45 @@ class Prot2Vec(object):
                 sel_candidates.append(candidates.pop())
             return sel_candidates
 
-        while n_batch != batch_size:
-            candidates = get_label_candidates(self.gram_index, self.num_skips, self.skip_window, len(self.data[self.seq_index]))
+        while n_batch != self._batch_size:
+            candidates = get_label_candidates(self._gram_index, self._num_skips, self._skip_window, len(self._data[self._seq_index]))
             for candidate in candidates:
-                batch[n_batch] = self.data[self.seq_index][self.gram_index]
-                labels[n_batch] = self.data[self.seq_index][candidate]
+                if n_batch == self._batch_size: break
+                batch[n_batch] = self._data[self._seq_index][self._gram_index]
+                labels[n_batch] = self._data[self._seq_index][candidate]
                 n_batch += 1
-            self.gram_index = (self.gram_index + 1)
-            if self.gram_index == len(self.data[self.seq_index]):
-                self.gram_index = 0
-                self.seq_index = (self.seq_index + 1)%len(self.data)
+            self._gram_index = self._gram_index + 1
+            if self._gram_index == len(self._data[self._seq_index]):
+                self._gram_index = 0
+                self._seq_index = (self._seq_index + 1)%len(self._data)
         return batch, labels
 
-    def learn(self):
+    def learn(self, embedding_size):
+        """
+        Training skip-gram model from data and return final embedding
+
+        Args:
+            embedding_size: the dimension of result word vector
+        """
         self.graph = tf.Graph()
 
         with self.graph.as_default():
 
             # Input data.
-            train_inputs = tf.placeholder(tf.int32, shape=[self.batch_size])
-            train_labels = tf.placeholder(tf.int32, shape=[self.batch_size, 1])
-            valid_dataset = tf.constant(self.valid_examples, dtype=tf.int32)
+            train_inputs = tf.placeholder(tf.int32, shape=[self._batch_size])
+            train_labels = tf.placeholder(tf.int32, shape=[self._batch_size, 1])
+            valid_dataset = tf.constant(self._valid_examples, dtype=tf.int32)
 
             # Ops and variables pinned to the CPU because of missing GPU implementation
             with tf.device('/gpu:0'):
             # Look up embeddings for inputs.
-                embeddings = tf.Variable(tf.random_uniform([self.vocabulary_size, self.embedding_size], -1.0, 1.0))
+                embeddings = tf.Variable(tf.random_uniform([self.vocabulary_size, embedding_size], -1.0, 1.0))
                 embed = tf.nn.embedding_lookup(embeddings, train_inputs)
 
                 # Construct the variables for the NCE loss
                 nce_weights = tf.Variable(
-                    tf.truncated_normal([self.vocabulary_size, self.embedding_size],
-                                        stddev=1.0 / math.sqrt(self.embedding_size)))
+                    tf.truncated_normal([self.vocabulary_size, embedding_size],
+                                        stddev=1.0 / math.sqrt(embedding_size)))
                 nce_biases = tf.Variable(tf.zeros([self.vocabulary_size]))
 
             # Compute the average NCE loss for the batch.
@@ -171,7 +189,7 @@ class Prot2Vec(object):
                          biases=nce_biases,
                          labels=train_labels,
                          inputs=embed,
-                         num_sampled=self.num_sampled,
+                         num_sampled=self._num_sampled,
                          num_classes=self.vocabulary_size))
 
             # Construct the SGD optimizer using a learning rate of 1.0.
@@ -188,48 +206,77 @@ class Prot2Vec(object):
             # Add variable initializer.
             init = tf.global_variables_initializer()
 
-    # Step 5: Begin training.
+        # Step 5: Begin training.
         with tf.Session(graph=self.graph) as session:
             # We must initialize all variables before we use them.
             init.run()
             print("Initialized")
 
             average_loss = 0
-            for step in xrange(self.num_steps):
-                batch_inputs, batch_labels = self.generate_batch(
-                    self.batch_size, self.num_skips, self.skip_window)
-            feed_dict = {train_inputs: batch_inputs, train_labels: batch_labels}
+            for step in xrange(self._num_steps):
+                batch_inputs, batch_labels = self._generate_batch()
+                feed_dict = {train_inputs: batch_inputs, train_labels: batch_labels}
 
-            # We perform one update step by evaluating the optimizer op (including it
-            # in the list of returned values for session.run()
-            _, loss_val = session.run([optimizer, loss], feed_dict=feed_dict)
-            average_loss += loss_val
+                # We perform one update step by evaluating the optimizer op (including it
+                # in the list of returned values for session.run()
+                _, loss_val = session.run([optimizer, loss], feed_dict=feed_dict)
+                average_loss += loss_val
 
-            if step % 2000 == 0:
-                if step > 0:
-                    average_loss /= 2000
-                    # The average loss is an estimate of the loss over the last 2000 batches.
-                    print("Average loss at step ", step, ": ", average_loss)
-                    average_loss = 0
+                if step % 2000 == 0:
+                    if step > 0:
+                        average_loss /= 2000
+                        # The average loss is an estimate of the loss over the last 2000 batches.
+                        print("Average loss at step ", step, ": ", average_loss)
+                        average_loss = 0
 
-            # Note that this is expensive (~20% slowdown if computed every 500 steps)
-            if step % 10000 == 0:
-                sim = similarity.eval()
-                for i in xrange(self.valid_size):
-                    valid_word = self.reverse_dictionary[self.valid_examples[i]]
-                    top_k = 8  # number of nearest neighbors
-                    nearest = (-sim[i, :]).argsort()[1:top_k + 1]
-                    log_str = "Nearest to %s:" % valid_word
-                for k in xrange(top_k):
-                    close_word = self.reverse_dictionary[nearest[k]]
-                    log_str = "%s %s," % (log_str, close_word)
-                print(log_str)
-            final_embeddings = normalized_embeddings.eval()
-        return final_embeddings
+                # Note that this is expensive (~20% slowdown if computed every 500 steps)
+                if step % 10000 == 0:
+                    sim = similarity.eval()
+                    for i in xrange(self._valid_size):
+                        valid_word = self._reverse_dictionary[self._valid_examples[i]]
+                        top_k = 8  # number of nearest neighbors
+                        nearest = (-sim[i, :]).argsort()[1:top_k + 1]
+                        log_str = "Nearest to %s:" % valid_word
+                    for k in xrange(top_k):
+                        close_word = self._reverse_dictionary[nearest[k]]
+                        log_str = "%s %s," % (log_str, close_word)
+                    print(log_str)
+            if self._normalized:
+                self._final_embeddings = normalized_embeddings.eval()
+            else:
+                self._final_embeddings = embeddings.eval()
+
+
+    def n_gram2vec(self, n_gram):
+        """
+        vectorize one n-gram
+
+        Args:
+            n_gram: n-gram word
+        Return:
+            vectorized_gram: vectorized n-gram
+        """
+        vectorized_gram = self._final_embeddings[self._dictionary[n_gram],:]
+        return vectorized_gram
+
+
+    def n_grams2vec(self, n_grams):
+        """
+        vectorize many n-grams and return average of vector
+
+        Args:
+            n_grams: list of n-gram words
+        Return:
+            vectorized_grams: average of vectorized n-gram words
+        """
+        vectorized_grams = sum(list(map(lambda gram: self.n_gram2vec(gram), n_grams)))
+        return vectorized_grams
+
+
+
 
 if __name__ == "__main__":
     # step 1 : parse sequence data from input file
-    import numpy as np
     import pandas as pd
     import argparse
     parser = argparse.ArgumentParser()
@@ -251,7 +298,7 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     embedding_size = args.embedding_size
 
-    prot2vec = Prot2Vec(skip_window, num_skips, batch_size, embedding_size)
+    prot2vec = Prot2Vec(skip_window, num_skips, batch_size)
 
     if args.output_file:
         output_file = args.output_file
@@ -262,8 +309,8 @@ if __name__ == "__main__":
     seq_list = f.readlines()
     f.close()
 
-    count, dictionary, reverse_dictionary = prot2vec.build_dataset_from_seqlist(seq_list)
-    final_embeddings = prot2vec.learn()
+    count, dictionary, reverse_dictionary = prot2vec.build_dataset_from_seqlist(seq_list, n)
+    final_embeddings = prot2vec.learn(embedding_size)
 
     '''
     # Step 6: Visualize the embeddings.
@@ -301,10 +348,9 @@ if __name__ == "__main__":
     # Step 6: Load target squences, gramize and vectorize.
 
     def n_grams2vec(n_grams_list):
-        vectorized = []
+        vectorized = np.zeros((final_embeddings.shape[1]), dtype=np.float32)
         for n_grams in n_grams_list:
-            grams_size = len(n_grams)
-            vec = sum(list(map(lambda gram: final_embeddings[dictionary[gram],:], n_grams)))/grams_size
+            vec = sum(list(map(lambda gram: final_embeddings[dictionary[gram],:], n_grams)))
             vectorized.append(list(vec))
         return vectorized
 
@@ -326,6 +372,7 @@ if __name__ == "__main__":
         df.dropna(inplace=True)
         df["vectorized"] = df[str(n)+"_gram"].map(n_grams2vec)
         df.to_csv(output_file)
+        print("save to "+output_file)
     else:
         f = open(target_file)
         seq_list = f.readlines()

@@ -46,7 +46,7 @@ def flatten_list(list_of_list):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("n", help="the number of gram", default=333, type=int)
+    parser.add_argument("n", help="the number of gram", default=3, type=int)
     parser.add_argument("input_file", help="input file to gramize")
     parser.add_argument("output_file", help="output file")
     parser.add_argument("--index", help="use if you have index")

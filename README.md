@@ -68,9 +68,10 @@ protein to vector, with tensorflow module.
 
 ```
 from prot2vec import Prot2vec
-prot2vec =  Prot2vec(skip_window, num_skips, batch_size, embedding_size)
+prot2vec =  Prot2vec(skip_window, num_skips, batch_size)
 count, dictionary, reverse_dictionary = prot2vec.build_dataset_from_seqlist(seq_list)
-final_embeddings =  prot2vec.learn()
+final_embeddings =  prot2vec.learn(embedding_size)
+vectorized_gram = final_embeddings[dictionary[gram]]
 ```
 
 ## Help
